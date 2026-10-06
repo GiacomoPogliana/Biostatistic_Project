@@ -42,7 +42,7 @@ The dataset(s) used in this project contain biological/genomic samples with asso
 
 ### 3. Statistical Modeling & Regression Analysis
 - Fitting Generalized Linear Models (GLMs) such as Linear or Logistic Regression to model outcome variables.
-- Evaluating model parameters, confidence intervals ($95\% \text{ CI}$), and odds ratios / effect sizes.
+- Evaluating model parameters, confidence intervals (95% CI), and odds ratios / effect sizes.
 - Assessing goodness-of-fit metrics (AIC, BIC, residual diagnostics, deviance analysis) and checking model assumptions.
 
 ### 4. Interactive Reporting
@@ -53,9 +53,7 @@ The dataset(s) used in this project contain biological/genomic samples with asso
 
 ## Implementation
 - **Language:** R (>= 4.0.0)
-
 - **Libraries Used:** `tidyverse` (`dplyr`, `ggplot2`, `readr`), `stats`, `knitr`, `rmarkdown`
-
 - **Repository Source:** The analysis is fully implemented in the R Markdown document (`POGLIANA_GIACOMO_308411.Rmd` / `main_analysis.Rmd`) and compiled into `index.html`.
 
 ---
@@ -69,7 +67,9 @@ The project reports detailed statistical outcomes, including parameter estimates
 
 To reproduce the analysis locally from the source files:
 
-1. **Install required packages in R:**
+1. Install required packages in R:
+   install.packages(c("tidyverse", "ggplot2", "knitr", "rmarkdown"))
 
-```R
-install.packages(c("tidyverse", "ggplot2", "knitr", "rmarkdown"))
+2. Render the report:
+   Open RStudio or an R session in the project directory and run:
+   rmarkdown::render("POGLIANA_GIACOMO_308411.Rmd", output_file = "index.html")
