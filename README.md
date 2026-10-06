@@ -64,12 +64,20 @@ The project reports detailed statistical outcomes, including parameter estimates
 ---
 
 ## Usage
+## Usage
 
 To reproduce the analysis locally from the source files:
 
 1. Install required packages in R:
-   install.packages(c("tidyverse", "ggplot2", "knitr", "rmarkdown"))
+
+```R
+install.packages(c("tidyverse", "ggplot2", "knitr", "rmarkdown"))
+```
 
 2. Render the report:
-   Open RStudio or an R session in the project directory and run:
-   rmarkdown::render("POGLIANA_GIACOMO_308411.Rmd", output_file = "index.html")
+
+Open RStudio or an R session in the project directory and run:
+
+```R
+rmarkdown::render("Biostatistic_Project.Rmd", output_file = "index.html")
+```
