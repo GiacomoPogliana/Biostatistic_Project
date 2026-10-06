@@ -12,12 +12,6 @@ Biostatistics project for the MSc in Bioinformatics for Computational Genomics: 
 
 ---
 
-## Published Report
-The full interactive statistical report, compiled directly from R Markdown, is published via GitHub Pages:  
-👉 **[View the Published Interactive Report](https://GiacomoPogliana.github.io/Biostatistic_Project/)**
-
----
-
 ## Description
 This project focuses on applying rigorous biostatistical methodology and data analysis techniques to biological and genomic data. The primary objective is to investigate statistical relationships, evaluate hypothesis testing frameworks under appropriate distributional assumptions, build regression models to account for potential confounders, and derive statistically grounded biological conclusions.
 
