@@ -1,0 +1,573 @@
+---
+title: "Biostatistics - Bioinformatics for Computational Genomics"
+subtitle: "Final Examination Template"
+author: "Professor: Francesca Ieva | Teaching Assistant: Stefania Colombo"
+date: "Academic Year 2025/2026"
+output:
+  html_document:
+    df_print: paged
+    toc: false
+    number_sections: false
+    theme: cosmo
+    highlight: tango
+  pdf_document:
+    fig_width: 5
+    fig_height: 4
+geometry: margin=2.5cm
+fontsize: 11pt
+editor_options:
+  chunk_output_type: console
+  markdown:
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+<br>
+
+# Student Information
+
+| Field                      | Information |
+|:---------------------------|:------------|
+| **Name**                   | Giacomo     |
+| **Surname**                | Pogliana    |
+| **Student ID (Matricola)** | 308411      |
+| **Personal Code**          | 11182334    |
+
+<br>
+
+------------------------------------------------------------------------
+
+# Instructions
+
+- Answer **only the two assigned questions**
+- Clearly justify all methodological choices
+- Report relevant statistical results
+- Provide biological and clinical interpretation of findings
+- Include comments directly below each code chunk
+
+<br>
+
+------------------------------------------------------------------------
+
+# Initial Setup
+
+## 1. Load Required Libraries
+
+```{r}
+library(survival)
+library(survminer)
+library(ggplot2)
+library(lme4)
+library(lmerTest)
+library(insight)
+```
+
+------------------------------------------------------------------------
+
+## 2. Load the Dataset
+
+```{r}
+load("autoimmune_study.RData")
+
+patients <- final_data$patients
+genotypes <- final_data$genotypes
+snp_info <- final_data$snp_info
+biomarker_data <- final_data$biomarker_data
+```
+
+------------------------------------------------------------------------
+
+## 3. Preliminary Data Inspection
+
+```{r}
+str(patients)
+str(genotypes)
+str(snp_info)
+str(biomarker_data)
+```
+
+<br>
+
+------------------------------------------------------------------------
+
+# Question 1
+
+## Question 13
+
+> Fit and compare linear mixed effects models for cytokine levels in
+> individual patients:
+>
+> 1.  Fit a model with:
+>
+>     - time, age, sex, treatment arm, and inflammatory index as fixed
+>       effects
+>
+>     - a random intercept for for patient. Interpret the results and
+>       verify the assumptions.
+>
+> 2.  Extend the model by adding a random slope for time at patient
+>     level.
+>
+> 3.  Compare the two models and assess whether allowing
+>     patient-specific trajectories improves the model fit. Clearly
+>     justify your choice.
+>
+> 4.  For the selected model plot estimated individual cytokine
+>     trajectories.
+
+------------------------------------------------------------------------
+
+## Step 1
+
+```{r}
+# Merge cytokine measurements with patient-level covariates
+cyto_lev <- merge(biomarker_data, 
+                  patients[, c("patient_id", "age", "sex", 
+                               "treatment_arm", "inflammatory_index")],
+                  by = "patient_id")
+
+# Fit M1: fixed effects for time, age, sex, treatment arm and inflammatory
+# index; random intercept for patient_id
+cyto_lev_mod_1 = lmer(value ~ time + age + sex + treatment_arm + inflammatory_index + (1 | patient_id), data=cyto_lev)
+
+summary(cyto_lev_mod_1)
+
+# PVRE: proportion of variance explained by the random intercept
+sigma2_eps <- as.numeric(get_variance_residual(cyto_lev_mod_1))
+sigma2_b   <- as.numeric(get_variance_random(cyto_lev_mod_1))
+PVRE       <- sigma2_b / (sigma2_b + sigma2_eps)
+PVRE
+
+# Residuals vs fitted
+plot(cyto_lev_mod_1)
+
+# Q-Q plot of residuals
+qqnorm(resid(cyto_lev_mod_1))
+qqline(resid(cyto_lev_mod_1), col='red', lwd=2)
+
+# Q-Q plot of random intercept
+qqnorm(unlist(ranef(cyto_lev_mod_1)$patient_id), main='Normal Q-Q Plot - Random Effects on Intercept')
+qqline(unlist(ranef(cyto_lev_mod_1)$patient_id), col='red', lwd=2)
+```
+
+### Interpretation
+
+The dataset contains longitudinal measurements of 12 cytokines per
+patient at multiple time points, stored in long format in
+'biomarker_data'. Rather than aggregating the cytokine measurements into
+a single summary score, all individual observations are retained as the
+response variable 'value', preserving the biological heterogeneity
+across cytokines. The random intercept for 'patient_id' accounts for the
+non-independence of repeated observations from the same patient.
+
+Time is the only statistically significant predictor
+($\hat\beta_1 = 0.145$, p \< 0.05): for each unit increase in time,
+cytokine levels increase by 0.145 units on average, holding all other
+covariates fixed. None of the remaining predictors reach statistical
+significance (p \> 0.05). The PVRE is 0.02%, indicating that only a very
+small fraction of the total variability in cytokine levels is
+attributable to differences between patients.
+
+As shown in the plots, the model assumptions are satisfied: the
+residuals-versus-fitted plot shows a random scatter around zero,
+supporting homoscedasticity of residuals, the Q-Q plot of residuals
+shows points closely aligned with the reference line, supporting
+normality of residuals and the Q-Q plot of the random intercepts shows
+points aligning with the reference line, supporting normality of random
+effects.
+
+Biologically, the significant positive effect of time indicates a
+progressive increase in cytokine levels over the observation period. The
+absence of significant effects for treatment arm, age, sex, and
+inflammatory index suggests that these variables do not independently
+predict cytokine dynamics after accounting for the temporal trend.
+
+------------------------------------------------------------------------
+
+## Step 2
+
+```{r}
+# Fit M2: extends M1 by adding a random slope for time at patient level
+cyto_lev_mod_2 = lmer(value ~ time + age + sex + treatment_arm + inflammatory_index + (1+time| patient_id), data=cyto_lev)
+
+summary(cyto_lev_mod_2)
+```
+
+### Interpretation
+
+The model cyto_lev_mod_2 extends cyto_lev_mod_1 by adding a
+patient-specific random slope for time, allowing each patient to have
+their own rate of change in cytokine levels over time in addition to
+their own baseline level. The fixed effect estimates are virtually
+identical to those of cyto_lev_mod_1($\hat\beta_1 = 0.145$, p \< 0.05),
+confirming that the population-average trajectory is stable across model
+specifications. However, cyto_lev_mod_2 produces a singular fit
+(warning: boundary (singular) fit): the random slope variance is
+practically zero (random slope variance = 1.013e-5), indicating that the
+data do not support patient-specific temporal trajectories. All patients
+share essentially the same rate of change in cytokine levels over time,
+and allowing the slope to vary by patient does not add meaningful
+information to the model.
+
+From a biological perspective, this suggests that the rate of cytokine
+increase over time is uniform across patients, regardless of their
+individual characteristics.
+
+------------------------------------------------------------------------
+
+## Step 3
+
+```{r}
+#LRT
+anova(cyto_lev_mod_1, cyto_lev_mod_2)
+```
+
+### Interpretation
+
+The two models are compared using a Likelihood Ratio Test (LRT). The
+anova function automatically refits both models with ML instead of REML
+to allow a valid comparison of models with different random effects
+structures.
+
+The p-value for the test is very high, 0.985, so we prefer
+cyto_lev_mod_1. This result is consistent with the singular fit observed
+in M2, where the random slope variance was practically zero, confirming
+that allowing patient-specific temporal trajectories does not improve
+the model.
+
+cyto_lev_mod_1 is therefore selected as the final model.
+
+------------------------------------------------------------------------
+
+## Step 4
+
+```{r}
+# Extract dataset
+cyto_lev_clean <- model.frame(cyto_lev_mod_1)
+
+# Add predicted values
+cyto_lev_clean$fitted     <- predict(cyto_lev_mod_1)
+cyto_lev_clean$fitted_pop <- predict(cyto_lev_mod_1, re.form = NA)
+
+# Plot
+ggplot(cyto_lev_clean, aes(x = time)) +
+  geom_line(aes(y = fitted_pop),
+            color = "red", linewidth = 1.5) +
+  geom_line(aes(y = fitted, group = patient_id),
+            alpha = 0.4, color = "darkblue", linewidth = 0.3) +
+  labs(
+    title    = "Estimated Individual Cytokine Trajectories (M1)",
+    subtitle = "Blue: individual trajectories | Red: population average",
+    x        = "Time",
+    y        = "Estimated cytokine level"
+  ) +
+  theme_minimal()
+```
+
+### Interpretation
+
+The plot shows the estimated individual cytokine trajectories (blue) for
+all 1,000 patients alongside the population average trajectory (red), as
+predicted by cyto_lev_mod_1. All individual trajectories cluster tightly
+around the population average, which is consistent with the very low
+PVRE (0.02%): patient-specific baseline differences are very small and
+all patients share the same rate of increase in cytokine levels over
+time. The positive slope of the population average confirms the
+significant effect of time found in cyto_lev_mod_1.
+
+------------------------------------------------------------------------
+
+## Final Comment for Question 1
+
+cyto_lev_mod_1, with fixed effects for time, age, sex, treatment arm and
+inflammatory index and a random intercept for patient, was selected as
+the final model. Time was the only significant predictor, indicating a
+progressive increase in cytokine levels over the observation period. The
+very low PVRE (0.02%) suggests that between-patient differences in
+baseline cytokine levels are very small, and the LRT confirmed that
+adding patient-specific temporal trajectories (cyto_lev_mod_2) does not
+improve the model fit. The estimated individual trajectories are
+consistent with these findings.
+
+------------------------------------------------------------------------
+
+# Question 2
+
+## Question 14
+
+> Study the association between genetic variants in `locus_5` and time
+> to severe clinical outcome.
+>
+> 1.  For each SNP in `locus_5`, convert genotype dosage into three
+>     (0,1,2).
+>
+> 2.  Define time to severe outcome as the endpoint of interest, where
+>     event is defined as hospitalization (exclude treatment failure).
+>
+> 3.  For each SNP, estimate Kaplan-Meir curves stratified by genotype
+>     and visually compare survival patterns across groups.
+>
+> 4.  Assess statistically whether time to severe outcome differs across
+>     genotype groups using an appropriate test. Report and interpret
+>     the results.
+>
+> 5.  For one representative SNP:
+>
+>     - report median time to severe outcome by genotype group
+>
+>     - report survival probabilities at 2, 5, 10 years.
+
+------------------------------------------------------------------------
+
+## Step 1
+
+```{r}
+#SNP IDs from locus_5
+snps_locus5 <- snp_info$snp_id[snp_info$locus == "locus_5"]
+
+geno_l5 <- genotypes[, c("patient_id", snps_locus5)]
+
+#Convert genotype dosage to categorical factor
+for (snp in snps_locus5) {
+  geno_l5[[snp]] <- factor(geno_l5[[snp]], levels = c(0, 1, 2))
+}
+```
+
+### Interpretation
+
+For each SNP in locus_5, genotype dosage values were already stored as
+integers (0, 1, 2) in the dataset. They were converted to categorical
+factors with three levels: 0 (homozygous reference), 1 (heterozygous),
+and 2 (homozygous alternative allele), to allow stratification of
+survival curves by genotype group.
+
+------------------------------------------------------------------------
+
+## Step 2
+
+```{r}
+# Define event indicator: 1 = hospitalization, 0 = otherwise
+patients$status_hosp <- ifelse(patients$outcome_type == "hospitalization", 1, 0)
+
+# Merge clinical data with genotype data
+data_locus5 <- merge(patients, geno_l5, by = "patient_id")
+```
+
+### Interpretation
+
+The endpoint of interest is time to severe clinical outcome, defined as
+hospitalization. The event indicator was set to 1 for patients whose
+outcome was hospitalization, and 0 for all others. Treatment failure was
+treated as censoring, meaning these patients are included in the
+analysis but assumed not to have experienced the event of interest at
+their observed time. The clinical and genotype datasets were then merged
+by patient ID, resulting in a dataset of 1000 patients with 42 SNPs from
+locus_5.
+
+------------------------------------------------------------------------
+
+## Step 3
+
+```{r}
+#Kaplan-Meier curves stratified by genotype for each locus_5 SNP
+for (snp in snps_locus5) {
+
+  # Remove rows with missing genotype for this SNP
+  df_snp <- data_locus5[!is.na(data_locus5[[snp]]), ]
+  
+  # Create genotype factor dropping empty levels
+  df_snp$geno_cat <- droplevels(df_snp[[snp]])
+  
+  # Skip SNP if fewer than 2 genotype groups are present
+  if (nlevels(df_snp$geno_cat) < 2) next
+  
+  # Fit Kaplan-Meier curves stratified by genotype
+  km_fit <- survfit(
+    Surv(time_to_severe_outcome, status_hosp) ~ geno_cat,
+    data = df_snp
+  )
+
+  # Plot KM curves
+  km_plot <- ggsurvplot(
+    km_fit,
+    data = df_snp,
+    conf.int = TRUE,
+    risk.table = TRUE,
+    pval = TRUE,
+    title = paste("Kaplan-Meier -", snp),
+    xlab = "Time (years)",
+    ylab = "Probability of no hospitalization"
+  )
+
+  suppressMessages(print(km_plot))
+}
+```
+
+### Interpretation
+
+Kaplan-Meier curves were estimated for 41 SNPs in locus_5
+(locus_5_snp_26 was excluded as all values were missing), stratified by
+genotype group (0, 1, 2). For most SNPs the three curves largely
+overlap, suggesting no strong systematic association between locus_5
+variants and time to hospitalization. In some SNPs, carriers of two
+copies of the alternative allele (genotype 2) tend to show lower
+survival probability over time compared to genotypes 0 and 1, though
+confidence intervals are wide due to the small sample size in genotype
+group 2. Overall, genotype groups 0 and 1 show similar survival patterns
+across most SNPs, while genotype 2 occasionally shows more divergent
+trajectories.
+
+From a biological perspective, the lack of consistent separation between
+genotype groups suggests that the variants in locus_5 do not appear to
+have a strong influence on the risk of hospitalization.
+
+------------------------------------------------------------------------
+
+## Step 4
+
+```{r}
+p.values_unadj <- c()
+
+#Log-rank test
+for (snp in snps_locus5) {
+  
+  df_snp <- data_locus5[!is.na(data_locus5[[snp]]), ]
+  df_snp$geno_cat <- droplevels(df_snp[[snp]])
+  if (nlevels(df_snp$geno_cat) < 2) next
+
+  log_rank_test <- survdiff(
+    Surv(time_to_severe_outcome, status_hosp) ~ geno_cat,
+    data = df_snp
+  )
+  p.values_unadj[snp] <- log_rank_test$pvalue
+  
+}
+
+#No correction
+decision_unadj <- rep("Do not reject H0", length(p.values_unadj))
+decision_unadj[p.values_unadj <= 0.05] <- "Reject H0"
+
+table(decision_unadj)
+
+#FWER
+FWER <- 1 - (1 - 0.05)^length(p.values_unadj)
+FWER
+
+
+#Bonferroni correction
+p.values_BF <- p.adjust(p.values_unadj,method = "bonferroni")
+
+decision_adj_BF <- rep("Do not reject H0",length(p.values_BF))
+decision_adj_BF[p.values_BF<=0.05] <- "Reject H0"
+
+table(decision_adj_BF)
+
+#Holm correction
+p.values_HM <- p.adjust(p.values_unadj,method = "holm")
+
+decision_HM <- rep("Do not reject H0",length(p.values_HM))
+decision_HM[p.values_HM<=0.05] <- "Reject H0"
+
+table(decision_HM)
+
+#Benjamini-Hochberg correction
+p.values_BH <- p.adjust(p.values_unadj,method = "BH")
+
+decision_BH <- rep("Do not reject H0",length(p.values_BH))
+decision_BH[p.values_BH<=0.05] <- "Reject H0"
+
+table(decision_BH)
+```
+
+### Interpretation
+
+The log-rank test was chosen as it is a non-parametric test that does
+not assume any particular distribution of survival times, and is the
+standard approach for comparing survival curves across groups. The
+log-rank test was applied to formally assess whether survival
+distributions differ across genotype groups for each SNP. Without
+correction for multiple testing, 6 out of 41 SNPs showed a nominally
+significant p-value (p \< 0.05). However, given that 41 tests were
+performed simultaneously, some significant results are expected by
+chance alone (FWER = 88% without correction). After applying multiple
+testing corrections (Bonferroni, Holm, and Benjamini-Hochberg at α =
+0.05), no SNP remained statistically significant. This suggests that the
+nominally significant results are likely false positives, and there is
+no robust statistical evidence of association between locus_5 variants
+and hospitalization.
+
+From a biological perspective, these results suggest that the genetic
+variants in locus_5 do not appear to determine the risk of
+hospitalization in this patient population.
+
+------------------------------------------------------------------------
+
+## Step 5
+
+```{r}
+#locus_5_snp_39 as representative SNP 
+df_locus_5_snp_39 <- data_locus5[!is.na(data_locus5[["locus_5_snp_39"]]), ]
+df_locus_5_snp_39$geno_cat <- droplevels(df_locus_5_snp_39[["locus_5_snp_39"]])
+
+#KM curves
+km_fit_locus_5_snp_39 <- survfit(
+  Surv(time_to_severe_outcome, status_hosp) ~ geno_cat,
+  data = df_locus_5_snp_39
+)
+
+print(km_fit_locus_5_snp_39)
+
+print(summary(km_fit_locus_5_snp_39, times = c(2, 5, 10)))
+```
+
+### Interpretation
+
+As the representative SNP, I selected locus_5_snp_39, which had the
+lowest unadjusted p-value (p = 0.0088). The median time to
+hospitalization was not reached in genotype groups 0 and 1, while in
+genotype group 2 it was 8.22 years (95% CI: 5.52 - NA). At 2 years
+survival probabilities were similar across groups (98.3%, 98.9%, 100%
+for genotypes 0, 1, 2 respectively). At 5 years, differences began to
+emerge (79.5%, 84.7%, 72.4% for genotypes 0, 1, 2 respectively).
+Differences became more pronounced at 10 years, where genotype 1 had the
+highest survival probability (64.3%), followed by genotype 0 (54.1%) and
+genotype 2 (47.4%). However, genotype group 2 contains only 27 patients,
+resulting in wide confidence intervals and unreliable estimates. These
+findings should be interpreted with caution given the lack of
+significance after multiple testing correction.
+
+From a biological perspective, the suggestive pattern observed in
+locus_5_snp_39, where carriers of two copies of the alternative allele
+(genotype 2) show lower survival probability over time, could indicate a
+potential genetic susceptibility to severe outcomes. However, given the
+lack of statistical significance after multiple testing correction and
+the small sample size in genotype group 2, this finding cannot be
+considered conclusive.
+
+------------------------------------------------------------------------
+
+## Final Comment for Question 2
+
+The analysis of 41 SNPs in locus_5 found no statistically significant
+association between genetic variants and time to severe clinical outcome
+(hospitalization) after correction for multiple testing. While 6 SNPs
+showed nominal significance, these results did not survive any of the
+three correction methods applied (Bonferroni, Holm, BH), suggesting they
+likely represent false positives arising from multiple testing. The
+representative SNP locus_5_snp_39 showed a suggestive pattern at 10
+years, with carriers of two copies of the minor allele having lower
+survival probability (47.4% vs 64.3% in heterozygotes), but the small
+sample size in genotype group 2 limits the reliability of this
+observation. Overall, locus_5 does not appear to harbor variants with a
+strong effect on time to hospitalization in this dataset.
+
+<br><br>
+
+------------------------------------------------------------------------
